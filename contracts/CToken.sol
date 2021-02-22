@@ -198,7 +198,8 @@ contract CToken is CTokenInterface, Exponential, TokenErrorReporter {
         return block.number;
     }
 
-    function getAlphaDebt() internal pure returns (uint) {
+    function getAlphaDebt() internal view returns (uint) {
+        // TODO: Update the numbers prior to mainnet deployment
         if (address(this) == 0x41c84c0e2EE0b740Cf0d31F63f3B6F627DC6b393) { // cyETH
             return 13_245e18;
         } else if (address(this) == 0x8e595470Ed749b85C6F7669de83EAe304C2ec68F) { // cyDAI
@@ -211,8 +212,8 @@ contract CToken is CTokenInterface, Exponential, TokenErrorReporter {
         return 0;
     }
 
-    function isBlacklisted() internal pure returns (bool) {
-        return msg.sender == 0x560A8E3B79d23b0A525E15C6F3486c6A293DDAd2 || msg.sender == 0x905315602Ed9a854e325F692FF82F58799BEaB57;
+    function isBlacklisted(address user) internal pure returns (bool) {
+        return user == 0x560A8E3B79d23b0A525E15C6F3486c6A293DDAd2 || user == 0x905315602Ed9a854e325F692FF82F58799BEaB57;
     }
 
     /**
@@ -628,7 +629,7 @@ contract CToken is CTokenInterface, Exponential, TokenErrorReporter {
       */
     function borrowInternal(uint borrowAmount) internal nonReentrant returns (uint) {
         // return if blacklisted
-        if (isBlacklisted()) {
+        if (isBlacklisted(msg.sender)) {
             return fail(Error.COMPTROLLER_REJECTION, FailureInfo.BORROW_COMPTROLLER_REJECTION);
         }
 
@@ -714,7 +715,7 @@ contract CToken is CTokenInterface, Exponential, TokenErrorReporter {
      */
     function repayBorrowInternal(uint repayAmount) internal nonReentrant returns (uint, uint) {
         // return if blacklisted
-        if (isBlacklisted()) {
+        if (isBlacklisted(msg.sender)) {
             return (fail(Error.COMPTROLLER_REJECTION, FailureInfo.BORROW_COMPTROLLER_REJECTION), 0);
         }
 
@@ -735,7 +736,7 @@ contract CToken is CTokenInterface, Exponential, TokenErrorReporter {
      */
     function repayBorrowBehalfInternal(address borrower, uint repayAmount) internal nonReentrant returns (uint, uint) {
         // return if blacklisted
-        if (isBlacklised()) {
+        if (isBlacklisted(borrower)) {
             return (fail(Error.COMPTROLLER_REJECTION, FailureInfo.BORROW_COMPTROLLER_REJECTION), 0);
         }
 
@@ -838,7 +839,7 @@ contract CToken is CTokenInterface, Exponential, TokenErrorReporter {
      */
     function liquidateBorrowInternal(address borrower, uint repayAmount, CTokenInterface cTokenCollateral) internal nonReentrant returns (uint, uint) {
         // return if blacklisted
-        if (isBlacklisted()) {
+        if (isBlacklisted(borrower)) {
             return (fail(Error.COMPTROLLER_REJECTION, FailureInfo.BORROW_COMPTROLLER_REJECTION), 0);
         }
 
