@@ -224,7 +224,11 @@ contract CToken is CTokenInterface, Exponential, TokenErrorReporter {
      * @return The supply interest rate per block, scaled by 1e18
      */
     function supplyRatePerBlock() external view returns (uint) {
-        return interestRateModel.getSupplyRate(getCashPrior(), sub_(totalBorrows, getAlphaDebt()), totalReserves, reserveFactorMantissa);
+        uint cashPrior = getCashPrior();
+        uint borrows = sub_(totalBorrows, getAlphaDebt());
+        uint rate = interestRateModel.getSupplyRate(cashPrior, borrows, totalReserves, reserveFactorMantissa);
+        uint interest = mul_(rate, add_(cashPrior, add_(borrows, totalReserves)));
+        return div_(interest, add_(cashPrior, add_(totalBorrows, totalReserves)));
     }
 
     /**
