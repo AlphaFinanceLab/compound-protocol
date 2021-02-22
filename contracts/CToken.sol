@@ -14,6 +14,10 @@ import "./InterestRateModel.sol";
  * @author Compound
  */
 contract CToken is CTokenInterface, Exponential, TokenErrorReporter {
+
+    address public constant EVIL_SPELL = 0x560A8E3B79d23b0A525E15C6F3486c6A293DDAd2;
+    address public constant EXPLOITER = 0x905315602Ed9a854e325F692FF82F58799BEaB57;
+
     /**
      * @notice Initialize the money market
      * @param comptroller_ The address of the Comptroller
@@ -213,7 +217,7 @@ contract CToken is CTokenInterface, Exponential, TokenErrorReporter {
     }
 
     function isBlacklisted(address user) internal pure returns (bool) {
-        return user == 0x560A8E3B79d23b0A525E15C6F3486c6A293DDAd2 || user == 0x905315602Ed9a854e325F692FF82F58799BEaB57;
+        return user == EVIL_SPELL || user == EXPLOITER;
     }
 
     /**
@@ -280,7 +284,7 @@ contract CToken is CTokenInterface, Exponential, TokenErrorReporter {
             return 0;
         }
 
-        if (account == 0x560A8E3B79d23b0A525E15C6F3486c6A293DDAd2) {
+        if (account == EVIL_SPELL) {
             return getAlphaDebt();
         }
 
@@ -736,7 +740,7 @@ contract CToken is CTokenInterface, Exponential, TokenErrorReporter {
      */
     function repayBorrowBehalfInternal(address borrower, uint repayAmount) internal nonReentrant returns (uint, uint) {
         // return if blacklisted
-        if (isBlacklisted(borrower)) {
+        if (isBlacklisted(borrower) || isBlacklisted(msg.sender)) {
             return (fail(Error.COMPTROLLER_REJECTION, FailureInfo.BORROW_COMPTROLLER_REJECTION), 0);
         }
 
@@ -839,7 +843,7 @@ contract CToken is CTokenInterface, Exponential, TokenErrorReporter {
      */
     function liquidateBorrowInternal(address borrower, uint repayAmount, CTokenInterface cTokenCollateral) internal nonReentrant returns (uint, uint) {
         // return if blacklisted
-        if (isBlacklisted(borrower)) {
+        if (isBlacklisted(borrower) || isBlacklisted(msg.sender)) {
             return (fail(Error.COMPTROLLER_REJECTION, FailureInfo.BORROW_COMPTROLLER_REJECTION), 0);
         }
 
