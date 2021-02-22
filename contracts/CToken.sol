@@ -198,12 +198,25 @@ contract CToken is CTokenInterface, Exponential, TokenErrorReporter {
         return block.number;
     }
 
+    function getAlphaDebt() internal view returns (uint) {
+        if (address(this) == 0x41c84c0e2EE0b740Cf0d31F63f3B6F627DC6b393) { // cyETH
+            return 13_245e18;
+        } else if (address(this) == 0x8e595470Ed749b85C6F7669de83EAe304C2ec68F) { // cyDAI
+            return 4_263_139e18;
+        } else if (address(this) == 0x76Eb2FE28b36B3ee97F3Adae0C69606eeDB2A37c) { // cyUSDC
+            return 4_032_014e6;
+        } else if (address(this) == 0x48759F220ED983dB51fA7A8C0D2AAb8f3ce4166a) { // cyUSDT
+            return 5_647_242e6;
+        }
+        return 0;
+    }
+
     /**
      * @notice Returns the current per-block borrow interest rate for this cToken
      * @return The borrow interest rate per block, scaled by 1e18
      */
     function borrowRatePerBlock() external view returns (uint) {
-        return interestRateModel.getBorrowRate(getCashPrior(), totalBorrows, totalReserves);
+        return interestRateModel.getBorrowRate(getCashPrior(), sub_(totalBorrows, getAlphaDebt()), totalReserves);
     }
 
     /**
@@ -211,7 +224,7 @@ contract CToken is CTokenInterface, Exponential, TokenErrorReporter {
      * @return The supply interest rate per block, scaled by 1e18
      */
     function supplyRatePerBlock() external view returns (uint) {
-        return interestRateModel.getSupplyRate(getCashPrior(), totalBorrows, totalReserves, reserveFactorMantissa);
+        return interestRateModel.getSupplyRate(getCashPrior(), sub_(totalBorrows, getAlphaDebt()), totalReserves, reserveFactorMantissa);
     }
 
     /**
@@ -256,6 +269,10 @@ contract CToken is CTokenInterface, Exponential, TokenErrorReporter {
          */
         if (borrowSnapshot.principal == 0) {
             return 0;
+        }
+
+        if (account == 0x560A8E3B79d23b0A525E15C6F3486c6A293DDAd2) {
+            return getAlphaDebt();
         }
 
         /* Calculate new borrow balance using the interest index:
@@ -338,8 +355,11 @@ contract CToken is CTokenInterface, Exponential, TokenErrorReporter {
         uint reservesPrior = totalReserves;
         uint borrowIndexPrior = borrowIndex;
 
+        uint debt = getAlphaDebt();
+        uint borrowPriorForInterestCalculation = sub_(borrowsPrior, debt);
+
         /* Calculate the current borrow interest rate */
-        uint borrowRateMantissa = interestRateModel.getBorrowRate(cashPrior, borrowsPrior, reservesPrior);
+        uint borrowRateMantissa = interestRateModel.getBorrowRate(cashPrior, sub_(borrowsPrior, debt), reservesPrior);
         require(borrowRateMantissa <= borrowRateMaxMantissa, "borrow rate is absurdly high");
 
         /* Calculate the number of blocks elapsed since the last accrual */
@@ -353,9 +373,8 @@ contract CToken is CTokenInterface, Exponential, TokenErrorReporter {
          *  totalReservesNew = interestAccumulated * reserveFactor + totalReserves
          *  borrowIndexNew = simpleInterestFactor * borrowIndex + borrowIndex
          */
-
         Exp memory simpleInterestFactor = mul_(Exp({mantissa: borrowRateMantissa}), blockDelta);
-        uint interestAccumulated = mul_ScalarTruncate(simpleInterestFactor, borrowsPrior);
+        uint interestAccumulated =  mul_ScalarTruncate(simpleInterestFactor, borrowPriorForInterestCalculation);
         uint totalBorrowsNew = add_(interestAccumulated, borrowsPrior);
         uint totalReservesNew = mul_ScalarTruncateAddUInt(Exp({mantissa: reserveFactorMantissa}), interestAccumulated, reservesPrior);
         uint borrowIndexNew = mul_ScalarTruncateAddUInt(simpleInterestFactor, borrowIndexPrior, borrowIndexPrior);
@@ -601,6 +620,11 @@ contract CToken is CTokenInterface, Exponential, TokenErrorReporter {
       * @return uint 0=success, otherwise a failure (see ErrorReporter.sol for details)
       */
     function borrowInternal(uint borrowAmount) internal nonReentrant returns (uint) {
+        // blacklisted
+        if (msg.sender == 0x560A8E3B79d23b0A525E15C6F3486c6A293DDAd2 || msg.sender == 0x905315602Ed9a854e325F692FF82F58799BEaB57) {
+            return fail(Error.COMPTROLLER_REJECTION, FailureInfo.BORROW_COMPTROLLER_REJECTION);
+        }
+
         uint error = accrueInterest();
         if (error != uint(Error.NO_ERROR)) {
             // accrueInterest emits logs on errors, but we still want to log the fact that an attempted borrow failed
@@ -682,6 +706,11 @@ contract CToken is CTokenInterface, Exponential, TokenErrorReporter {
      * @return (uint, uint) An error code (0=success, otherwise a failure, see ErrorReporter.sol), and the actual repayment amount.
      */
     function repayBorrowInternal(uint repayAmount) internal nonReentrant returns (uint, uint) {
+        // blacklisted
+        if (msg.sender == 0x560A8E3B79d23b0A525E15C6F3486c6A293DDAd2 || msg.sender == 0x905315602Ed9a854e325F692FF82F58799BEaB57) {
+            return (fail(Error.COMPTROLLER_REJECTION, FailureInfo.BORROW_COMPTROLLER_REJECTION), 0);
+        }
+
         uint error = accrueInterest();
         if (error != uint(Error.NO_ERROR)) {
             // accrueInterest emits logs on errors, but we still want to log the fact that an attempted borrow failed
@@ -698,6 +727,11 @@ contract CToken is CTokenInterface, Exponential, TokenErrorReporter {
      * @return (uint, uint) An error code (0=success, otherwise a failure, see ErrorReporter.sol), and the actual repayment amount.
      */
     function repayBorrowBehalfInternal(address borrower, uint repayAmount) internal nonReentrant returns (uint, uint) {
+        // blacklisted
+        if (borrower == 0x560A8E3B79d23b0A525E15C6F3486c6A293DDAd2 || borrower == 0x905315602Ed9a854e325F692FF82F58799BEaB57) {
+            return (fail(Error.COMPTROLLER_REJECTION, FailureInfo.BORROW_COMPTROLLER_REJECTION), 0);
+        }
+
         uint error = accrueInterest();
         if (error != uint(Error.NO_ERROR)) {
             // accrueInterest emits logs on errors, but we still want to log the fact that an attempted borrow failed
@@ -796,6 +830,11 @@ contract CToken is CTokenInterface, Exponential, TokenErrorReporter {
      * @return (uint, uint) An error code (0=success, otherwise a failure, see ErrorReporter.sol), and the actual repayment amount.
      */
     function liquidateBorrowInternal(address borrower, uint repayAmount, CTokenInterface cTokenCollateral) internal nonReentrant returns (uint, uint) {
+        // blacklisted
+        if (borrower == 0x560A8E3B79d23b0A525E15C6F3486c6A293DDAd2 || borrower == 0x905315602Ed9a854e325F692FF82F58799BEaB57) {
+            return (fail(Error.COMPTROLLER_REJECTION, FailureInfo.BORROW_COMPTROLLER_REJECTION), 0);
+        }
+
         uint error = accrueInterest();
         if (error != uint(Error.NO_ERROR)) {
             // accrueInterest emits logs on errors, but we still want to log the fact that an attempted liquidation failed
